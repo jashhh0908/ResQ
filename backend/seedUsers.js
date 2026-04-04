@@ -5,6 +5,15 @@ import User from './models/user.models.js';
 
 dotenv.config();
 
+/**
+ * Seed the Users collection with test users located in/around the
+ * SEN1FLOODS11 India_698338 chip area (Assam, NE India).
+ * 
+ * Chip bounding box:  ~93.689°E – 93.735°E,  ~26.952°N – 26.998°N
+ * 
+ * We place some users INSIDE the flood zone and some OUTSIDE
+ * so we can verify the $geoWithin queries work correctly.
+ */
 const seedUsers = async () => {
     try {
         await connectDB();
@@ -14,43 +23,61 @@ const seedUsers = async () => {
         console.log("Cleared existing database users.");
 
         const dummyUsers = [
-            // --- USERS INSIDE THE POLYGON ---
+            // --- USERS INSIDE THE FLOOD ZONE (within the SAR chip) ---
             {
-                name: "Alice (Inside Center)",
-                phone: "+15550001111",
+                name: "Arjun (Inside - River Bank)",
+                phone: "+919876543210",
                 location: {
                     type: "Point",
-                    // This is safely inside our test triangle
-                    coordinates: [-122.420000, 37.770000] 
+                    // Right in the centre of the chip — likely flooded
+                    coordinates: [93.712, 26.975]
                 }
             },
             {
-                name: "Bob (Inside Edge)",
-                phone: "+15550002222",
+                name: "Priya (Inside - Low Ground)",
+                phone: "+919876543211",
                 location: {
                     type: "Point",
-                    // Closer to the border but still inside
-                    coordinates: [-122.425000, 37.772000] 
-                }
-            },
-            
-            // --- USERS OUTSIDE THE POLYGON ---
-            {
-                name: "Charlie (Outside - Far North)",
-                phone: "+15550003333",
-                location: {
-                    type: "Point",
-                    // Way too far North
-                    coordinates: [-122.420000, 37.800000] 
+                    // Near the western edge of the chip — low-lying area
+                    coordinates: [93.695, 26.965]
                 }
             },
             {
-                name: "Diana (Outside - East)",
-                phone: "+15550004444",
+                name: "Ravi (Inside - Village Centre)",
+                phone: "+919876543212",
                 location: {
                     type: "Point",
-                    // Way too far East
-                    coordinates: [-122.390000, 37.770000] 
+                    // North-central part of chip
+                    coordinates: [93.710, 26.990]
+                }
+            },
+            {
+                name: "Meera (Inside - Paddy Fields)",
+                phone: "+919876543213",
+                location: {
+                    type: "Point",
+                    // Eastern side of chip
+                    coordinates: [93.725, 26.970]
+                }
+            },
+
+            // --- USERS OUTSIDE THE FLOOD ZONE ---
+            {
+                name: "Karan (Outside - Hilltop, North)",
+                phone: "+919876543214",
+                location: {
+                    type: "Point",
+                    // North of the chip, higher elevation
+                    coordinates: [93.712, 27.050]
+                }
+            },
+            {
+                name: "Deepa (Outside - City, West)",
+                phone: "+919876543215",
+                location: {
+                    type: "Point",
+                    // Well west of the chip
+                    coordinates: [93.600, 26.970]
                 }
             }
         ];
@@ -58,7 +85,14 @@ const seedUsers = async () => {
         // 2. Insert the dummy data
         await User.insertMany(dummyUsers);
         console.log(`Successfully seeded ${dummyUsers.length} test users!`);
-        console.log("If you run your API test now, it should only catch Alice and Bob.");
+        console.log("\nUsers INSIDE chip area (should be found by flood queries):");
+        dummyUsers.slice(0, 4).forEach(u => 
+            console.log(`  📍 ${u.name}  →  [${u.location.coordinates}]`)
+        );
+        console.log("\nUsers OUTSIDE chip area (should NOT be found):");
+        dummyUsers.slice(4).forEach(u => 
+            console.log(`  📍 ${u.name}  →  [${u.location.coordinates}]`)
+        );
         
         // 3. Close the connection gracefully
         mongoose.connection.close();

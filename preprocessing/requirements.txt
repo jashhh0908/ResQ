@@ -1,0 +1,7 @@
+# Aegis-Core  ·  Flood Detection Worker Dependencies
+rasterio>=1.3
+numpy>=1.24
+scikit-image>=0.21
+geopandas>=0.14
+shapely>=2.0
+requests>=2.31
