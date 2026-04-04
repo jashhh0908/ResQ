@@ -1,121 +1,75 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+import React, { useState, useEffect } from 'react';
+import { io } from 'socket.io-client';
+import Dispatch from './pages/Dispatch';
+
+const SOCKET_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
 function App() {
-  const [count, setCount] = useState(0)
+    const [isConnected, setIsConnected] = useState(false);
+    const [logs, setLogs] = useState([]);
+    const [dashboardData, setDashboardData] = useState({
+        hazard_breakdown: { flood_current: 0, flood_spread: 0 },
+        affected: {
+            in_flood_zone: 0,
+            in_spread_zone: 0,
+            flood_zone_users: [],
+            spread_zone_users: []
+        },
+        active_polygons: []
+    });
 
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    useEffect(() => {
+        const socket = io(SOCKET_URL);
 
-      <div className="ticks"></div>
+        socket.on('connect', () => {
+            setIsConnected(true);
+            addLog("System Uplink Established. Satellite feed synced.");
+        });
 
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
+        socket.on('disconnect', () => {
+            setIsConnected(false);
+            addLog("⚠️ Uplink Interrupted. Attempting reconnection...");
+        });
 
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+        socket.on('update_dashboard', (data) => {
+            setDashboardData(data);
+            
+            // Logic for auto-logging based on new data
+            if (data.hazard_breakdown.flood_current > 0) {
+                addLog(`🚨 CRITICAL: ${data.affected.in_flood_zone} civilians detected in active flood zone. Dispatching alerts...`);
+            }
+            if (data.hazard_breakdown.flood_spread > 0) {
+                addLog(`🟡 WARNING: ${data.affected.in_spread_zone} civilians in predicted path. Preparing evacuation warnings.`);
+            }
+        });
+
+        // Mock state hydration if needed (can be fetched from GET /api/state)
+        fetch(`${SOCKET_URL}/api/state`)
+            .then(res => res.json())
+            .then(data => {
+                if (data && data.affected) setDashboardData(data);
+            })
+            .catch(err => console.log("State hydration skipped."));
+
+        return () => {
+            socket.disconnect();
+        };
+    }, []);
+
+    const addLog = (message) => {
+        setLogs(prev => [{
+            timestamp: new Date().toISOString(),
+            message
+        }, ...prev].slice(0, 50)); // Keep last 50 logs
+    };
+
+    return (
+        <Dispatch 
+            data={dashboardData} 
+            isConnected={isConnected}
+            logs={logs}
+        />
+    );
 }
 
-export default App
+export default App;
