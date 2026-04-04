@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import connectDB from './config/connectDB.js';
+import hazardRoutes from './routes/hazard.routes.js';
 
 dotenv.config();
 
@@ -11,7 +12,7 @@ app.use(cors());
 app.use(express.json());
 
 // Routes
-
+app.use('/api', hazardRoutes);
 // Root route
 app.get('/', (req, res) => {
   res.send('Welcome to ResQ API');
