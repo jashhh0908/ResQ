@@ -810,6 +810,58 @@ def list_available_chips():
     print("  " + "─" * 55)
     print()
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# 11.  DATASET FETCHER
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def fetch_dataset(limit: int = 50, split: str = "train"):
+    """
+    Download actual SEN1FLOODS11 S1Hand and LabelHand images for U-Net training.
+    """
+    url = f"https://storage.googleapis.com/sen1floods11/v1.1/splits/flood_handlabeled/flood_{split}_data.csv"
+    log.info("Fetching dataset split: %s from %s", split, url)
+    df = pd.read_csv(url, header=None)
+    
+    # Workspace root data dir
+    base_dir = Path(__file__).parent.parent / "data"
+    img_dir = base_dir / "images"
+    mask_dir = base_dir / "masks"
+    img_dir.mkdir(parents=True, exist_ok=True)
+    mask_dir.mkdir(parents=True, exist_ok=True)
+    
+    pairs = df.values.tolist()
+    if limit:
+        pairs = pairs[:limit]
+        
+    log.info("Downloading %d pairs...", len(pairs))
+    
+    s1_base = f"{GCS_BASE}/v1.1/data/flood_events/HandLabeled/S1Hand"
+    label_base = f"{GCS_BASE}/v1.1/data/flood_events/HandLabeled/LabelHand"
+    
+    for i, row in enumerate(pairs):
+        s1_file = row[0]
+        label_file = row[1] if len(row) > 1 else s1_file.replace("S1Hand", "LabelHand")
+        
+        s1_url = f"{s1_base}/{s1_file}"
+        label_url = f"{label_base}/{label_file}"
+        
+        s1_local = img_dir / s1_file
+        label_local = mask_dir / label_file
+        
+        if not s1_local.exists():
+            log.info("[%d/%d] Downloading %s", i+1, len(pairs), s1_file)
+            resp = requests.get(s1_url)
+            resp.raise_for_status()
+            s1_local.write_bytes(resp.content)
+            
+        if not label_local.exists():
+            log.info("[%d/%d] Downloading %s", i+1, len(pairs), label_file)
+            resp = requests.get(label_url)
+            resp.raise_for_status()
+            label_local.write_bytes(resp.content)
+            
+    log.info("Finished downloading %d pairs to %s and %s", len(pairs), img_dir, mask_dir)
+
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # 11.  __main__  –  DEMO / TEST ENTRY POINT
@@ -849,12 +901,21 @@ if __name__ == "__main__":
                         help="Path to local SAR .tif (overrides SEN1FLOODS11)")
     parser.add_argument("dem_file", nargs="?", default=None,
                         help="Path to local DEM .tif (optional)")
+    parser.add_argument("--download-dataset", action="store_true",
+                        help="Download actual SEN1FLOODS11 dataset and exit")
+    parser.add_argument("--limit", type=int, default=50,
+                        help="Limit number of dataset pairs to download")
 
     args = parser.parse_args()
 
     # ── List mode ────────────────────────────────────────────────────────
     if args.list:
         list_available_chips()
+        sys.exit(0)
+
+    # ── Dataset Download mode ────────────────────────────────────────────
+    if args.download_dataset:
+        fetch_dataset(limit=args.limit)
         sys.exit(0)
 
     # ── Determine SAR source ─────────────────────────────────────────────
